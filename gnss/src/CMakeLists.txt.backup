@@ -12,17 +12,15 @@ find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
-# Generate BOTH custom messages
+# Generate custom message
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Customgps.msg"
-  "msg/Customrtk.msg"
   DEPENDENCIES std_msgs sensor_msgs geometry_msgs
 )
 
-# Install BOTH Python scripts
+# Install Python scripts
 install(PROGRAMS
   scripts/gnss_driver.py
-  scripts/rtk_driver.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

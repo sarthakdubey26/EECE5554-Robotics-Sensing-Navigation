@@ -1,0 +1,17 @@
+LAB 2 RESULTS SUMMARY
+======================================================================
+
+FOUR CALCULATED ERROR VALUES:
+1. Standalone GPS Open Stationary:     1.8000 m
+2. Standalone GPS Occluded Stationary: 3.2000 m
+3. RTK GPS Open Stationary:             0.0391 m
+4. RTK GPS Occluded Stationary:         0.1006 m
+
+WALKING DATA:
+Standalone GPS Walking: 2.7000 m
+RTK GPS Walking:        0.0370 m
+
+IMPROVEMENT FACTORS:
+Open Stationary: 46.0x
+Occluded Stationary: 31.8x
+Walking: 73.0x
