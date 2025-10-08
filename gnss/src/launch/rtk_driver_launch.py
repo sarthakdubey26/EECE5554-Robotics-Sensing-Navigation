@@ -8,7 +8,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'port',
             default_value='/dev/ttyUSB0',
-            description='Serial port for RTK GPS device'
+            description='Serial port for RTK GPS'
         ),
         Node(
             package='gnss',

@@ -5,28 +5,24 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
-# Generate BOTH custom messages
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Customgps.msg"
   "msg/Customrtk.msg"
   DEPENDENCIES std_msgs sensor_msgs geometry_msgs
 )
 
-# Install BOTH Python scripts
 install(PROGRAMS
   scripts/gnss_driver.py
   scripts/rtk_driver.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# Install launch files
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}/
 )

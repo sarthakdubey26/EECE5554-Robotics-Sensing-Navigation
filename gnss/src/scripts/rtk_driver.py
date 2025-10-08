@@ -16,19 +16,16 @@ class RTKDriver(Node):
         
         try:
             self.serial_port = serial.Serial(port, 4800, timeout=1)
-            self.get_logger().info(f'Connected to RTK GPS on port: {port}')
+            self.get_logger().info(f'RTK GPS connected: {port}')
         except Exception as e:
-            self.get_logger().error(f'Failed to connect: {e}')
+            self.get_logger().error(f'Connection failed: {e}')
             sys.exit(1)
             
         self.timer = self.create_timer(0.1, self.read_rtk_data)
         
     def parse_gngga(self, gngga_string):
-        """Parse GNGGA string - NOTE: GNGGA not GPGGA for RTK!"""
         try:
             parts = gngga_string.split(',')
-            
-            # Must be GNGGA for RTK (multi-constellation)
             if len(parts) < 15 or parts[0] != '$GNGGA':
                 return None
                 
@@ -36,7 +33,6 @@ class RTKDriver(Node):
             if not utc_time:
                 return None
                 
-            # Latitude
             lat_deg = parts[2]
             lat_dir = parts[3]
             if not lat_deg or not lat_dir:
@@ -48,7 +44,6 @@ class RTKDriver(Node):
             if lat_dir == 'S':
                 latitude = -latitude
                 
-            # Longitude
             lon_deg = parts[4]
             lon_dir = parts[5]
             if not lon_deg or not lon_dir:
@@ -60,7 +55,6 @@ class RTKDriver(Node):
             if lon_dir == 'W':
                 longitude = -longitude
             
-            # RTK-specific fields
             fix_quality = int(parts[6]) if parts[6] else 0
             hdop = float(parts[8]) if parts[8] else 0.0
             altitude = float(parts[9]) if parts[9] else 0.0
@@ -73,8 +67,7 @@ class RTKDriver(Node):
                 'fix_quality': fix_quality,
                 'hdop': hdop
             }
-        except (ValueError, IndexError) as e:
-            self.get_logger().warn(f'Error parsing GNGGA: {e}')
+        except (ValueError, IndexError):
             return None
             
     def utc_to_epoch(self, utc_time_str):
@@ -86,9 +79,7 @@ class RTKDriver(Node):
             seconds = float(utc_time_str[4:])
             now = datetime.now()
             gps_time = datetime(now.year, now.month, now.day, hours, minutes, int(seconds))
-            epoch_time = int(gps_time.timestamp())
-            nanoseconds = int((seconds % 1) * 1e9)
-            return epoch_time, nanoseconds
+            return int(gps_time.timestamp()), int((seconds % 1) * 1e9)
         except:
             return 0, 0
             
@@ -96,11 +87,8 @@ class RTKDriver(Node):
         try:
             if self.serial_port.in_waiting > 0:
                 line = self.serial_port.readline().decode('utf-8').strip()
-                
-                # Look for GNGGA strings
                 if line.startswith('$GNGGA'):
                     parsed_data = self.parse_gngga(line)
-                    
                     if parsed_data:
                         try:
                             utm_easting, utm_northing, zone, letter = utm.from_latlon(
@@ -127,19 +115,8 @@ class RTKDriver(Node):
                         msg.gngga_read = line
                         
                         self.publisher.publish(msg)
-                        
-                        fix_types = {0: 'No Fix', 1: 'GPS', 2: 'DGPS', 4: 'RTK Fixed', 5: 'RTK Float'}
-                        fix_str = fix_types.get(parsed_data['fix_quality'], 'Unknown')
-                        self.get_logger().info(
-                            f'RTK: lat={msg.latitude:.6f}, lon={msg.longitude:.6f}, '
-                            f'Fix={fix_str}, HDOP={parsed_data["hdop"]:.2f}'
-                        )
-        except Exception as e:
-            self.get_logger().error(f'Error: {e}')
-            
-    def __del__(self):
-        if hasattr(self, 'serial_port') and self.serial_port.is_open:
-            self.serial_port.close()
+        except:
+            pass
 
 def main(args=None):
     rclpy.init(args=args)

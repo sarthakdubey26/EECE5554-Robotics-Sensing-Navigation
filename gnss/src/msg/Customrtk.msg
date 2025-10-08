@@ -1,4 +1,3 @@
-# Custom RTK GPS message for EECE 5554 Lab 2
 std_msgs/Header header
 float64 latitude
 float64 longitude
