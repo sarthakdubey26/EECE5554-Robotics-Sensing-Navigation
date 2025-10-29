@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# ROS2
+install/
+build/
+log/
+
+# Large data files - NEVER commit these!
+*.db3
+*.bag
+*.csv
+*5hour*
+*5_hour*
+*stationary_5min*
+*freeform*
+
+# But DO keep plots and parameters
+!**/plots/*.png
+!**/plots/*.txt
+!**/plots/*.pdf

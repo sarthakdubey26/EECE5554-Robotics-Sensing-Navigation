@@ -1,0 +1,18 @@
+ALLAN VARIANCE PARAMETERS (5-Hour Data)
+============================================================
+
+X-axis:
+  Angle Random Walk (N): 0.000104 rad/√s
+  Rate Random Walk (K):  0.000000 rad/s^1.5
+  Bias Stability (B):    0.000003 rad/s
+
+Y-axis:
+  Angle Random Walk (N): 0.000150 rad/√s
+  Rate Random Walk (K):  0.000024 rad/s^1.5
+  Bias Stability (B):    0.000002 rad/s
+
+Z-axis:
+  Angle Random Walk (N): 0.308810 rad/√s
+  Rate Random Walk (K):  0.000093 rad/s^1.5
+  Bias Stability (B):    0.004624 rad/s
+

@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Header
+from sensor_msgs.msg import Imu, MagneticField
+from custom_msgs.msg import Vectornav
+import serial
+import sys
+import math
+from scipy.spatial.transform import Rotation as R
+
+class VectorNavDriver(Node):
+    def __init__(self, port):
+        super().__init__('vn_driver')
+        
+        self.publisher = self.create_publisher(Vectornav, '/imu', 10)
+        
+        try:
+            self.serial_port = serial.Serial(port, 115200, timeout=1)
+            self.get_logger().info(f'VectorNav IMU connected on {port}')
+            
+            # Configure to 40 Hz
+            self.configure_output_rate(40)
+            
+        except Exception as e:
+            self.get_logger().error(f'Failed to connect: {e}')
+            sys.exit(1)
+        
+        self.timer = self.create_timer(0.01, self.read_imu_data)
+        
+    def configure_output_rate(self, rate_hz):
+        """Configure VectorNav to output at specified Hz using register 7"""
+        try:
+            cmd_base = f"VNWRG,07,{rate_hz}"
+            checksum = 0
+            for char in cmd_base:
+                checksum ^= ord(char)
+            
+            cmd = f"${cmd_base}*{checksum:02X}\r\n"
+            
+            self.get_logger().info(f'Configuring to {rate_hz} Hz: {cmd.strip()}')
+            self.serial_port.write(cmd.encode('utf-8'))
+            
+            import time
+            time.sleep(0.5)
+            self.serial_port.reset_input_buffer()
+            
+            self.get_logger().info(f'IMU configured to {rate_hz} Hz')
+            
+        except Exception as e:
+            self.get_logger().error(f'Failed to configure rate: {e}')
+    
+    def convert_to_quaternion(self, roll, pitch, yaw):
+        """
+        Convert Euler angles to quaternion.
+        VectorNav: Roll, Pitch, Yaw in DEGREES, ZYX order
+        ROS: Quaternion (x, y, z, w)
+        """
+        roll_rad = math.radians(roll)
+        pitch_rad = math.radians(pitch)
+        yaw_rad = math.radians(yaw)
+        
+        rotation = R.from_euler('ZYX', [yaw_rad, pitch_rad, roll_rad])
+        quat = rotation.as_quat()
+        
+        return quat[0], quat[1], quat[2], quat[3]
+    
+    def parse_vnymr(self, vnymr_string):
+        """
+        Parse VNYMR string.
+        Format: $VNYMR,YAW,PITCH,ROLL,MAG_X,MAG_Y,MAG_Z,ACCEL_X,ACCEL_Y,ACCEL_Z,GYRO_X,GYRO_Y,GYRO_Z*CHECKSUM
+        
+        VectorNav units:
+        - Angles: degrees
+        - Magnetometer: Gauss → Convert to Tesla (×1e-4)
+        - Acceleration: m/s² → Already correct
+        - Gyro: rad/s → Already correct
+        """
+        try:
+            parts = vnymr_string.strip().replace('$', '').split(',')
+            
+            if len(parts) < 13 or parts[0] != 'VNYMR':
+                return None
+            
+            yaw = float(parts[1])
+            pitch = float(parts[2])
+            roll = float(parts[3])
+            
+            mag_x = float(parts[4]) * 1e-4  # Gauss to Tesla
+            mag_y = float(parts[5]) * 1e-4
+            mag_z = float(parts[6]) * 1e-4
+            
+            accel_x = float(parts[7])
+            accel_y = float(parts[8])
+            accel_z = float(parts[9])
+            
+            gyro_x = float(parts[10])
+            gyro_y = float(parts[11])
+            gyro_z = float(parts[12].split('*')[0])
+            
+            qx, qy, qz, qw = self.convert_to_quaternion(roll, pitch, yaw)
+            
+            return {
+                'orientation': {'x': qx, 'y': qy, 'z': qz, 'w': qw},
+                'angular_velocity': {'x': gyro_x, 'y': gyro_y, 'z': gyro_z},
+                'linear_acceleration': {'x': accel_x, 'y': accel_y, 'z': accel_z},
+                'magnetic_field': {'x': mag_x, 'y': mag_y, 'z': mag_z}
+            }
+            
+        except (ValueError, IndexError) as e:
+            self.get_logger().warn(f'Parse error: {e}')
+            return None
+    
+    def read_imu_data(self):
+        """Read and publish IMU data"""
+        try:
+            if self.serial_port.in_waiting > 0:
+                line = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
+                
+                if line.startswith('$VNYMR'):
+                    parsed = self.parse_vnymr(line)
+                    
+                    if parsed:
+                        msg = Vectornav()
+                        
+                        msg.header = Header()
+                        msg.header.stamp = self.get_clock().now().to_msg()
+                        msg.header.frame_id = 'imu1_frame'
+                        
+                        msg.imu = Imu()
+                        msg.imu.header = msg.header
+                        msg.imu.orientation.x = parsed['orientation']['x']
+                        msg.imu.orientation.y = parsed['orientation']['y']
+                        msg.imu.orientation.z = parsed['orientation']['z']
+                        msg.imu.orientation.w = parsed['orientation']['w']
+                        msg.imu.angular_velocity.x = parsed['angular_velocity']['x']
+                        msg.imu.angular_velocity.y = parsed['angular_velocity']['y']
+                        msg.imu.angular_velocity.z = parsed['angular_velocity']['z']
+                        msg.imu.linear_acceleration.x = parsed['linear_acceleration']['x']
+                        msg.imu.linear_acceleration.y = parsed['linear_acceleration']['y']
+                        msg.imu.linear_acceleration.z = parsed['linear_acceleration']['z']
+                        
+                        msg.mag_field = MagneticField()
+                        msg.mag_field.header = msg.header
+                        msg.mag_field.magnetic_field.x = parsed['magnetic_field']['x']
+                        msg.mag_field.magnetic_field.y = parsed['magnetic_field']['y']
+                        msg.mag_field.magnetic_field.z = parsed['magnetic_field']['z']
+                        
+                        msg.raw_imu_string = line
+                        
+                        self.publisher.publish(msg)
+                        
+        except Exception as e:
+            self.get_logger().error(f'Read error: {e}')
+
+def main(args=None):
+    rclpy.init(args=args)
+    
+    if len(sys.argv) < 2:
+        print("Usage: ros2 run vn_driver vn_driver <port>")
+        sys.exit(1)
+    
+    node = VectorNavDriver(sys.argv[1])
+    
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
